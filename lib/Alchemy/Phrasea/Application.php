@@ -76,6 +76,7 @@ use Alchemy\Phrasea\Core\Provider\UnicodeServiceProvider;
 use Alchemy\Phrasea\Core\Provider\ZippyServiceProvider;
 use Alchemy\Phrasea\Exception\InvalidArgumentException;
 use Alchemy\Phrasea\Form\Extension\HelpTypeExtension;
+use Alchemy\Phrasea\Lightbox\LightboxServiceProvider;
 use Alchemy\Phrasea\Model\Entities\User;
 use Alchemy\Phrasea\Twig\BytesConverter;
 use Alchemy\Phrasea\Twig\Camelize;
@@ -319,6 +320,7 @@ class Application extends SilexApplication
             'Alchemy\Phrasea\ControllerProvider\Report\Root' => [],
             'Alchemy\Phrasea\ControllerProvider\Datafiles' => [],
             'Alchemy\Phrasea\ControllerProvider\Lightbox' => [],
+            'Alchemy\Phrasea\Lightbox\LightboxServiceProvider' => [],
             'Alchemy\Phrasea\ControllerProvider\MediaAccessor' => [],
             'Alchemy\Phrasea\ControllerProvider\Minifier' => [],
             'Alchemy\Phrasea\ControllerProvider\Permalink' => [],
@@ -654,6 +656,7 @@ class Application extends SilexApplication
             '/download/'                   => 'Alchemy\Phrasea\ControllerProvider\Prod\DoDownload',
             '/include/minify'              => 'Alchemy\Phrasea\ControllerProvider\Minifier',
             '/lightbox'                    => 'Alchemy\Phrasea\ControllerProvider\Lightbox',
+            '/lightbox2'                   => 'Alchemy\Phrasea\Lightbox\LightboxServiceProvider',
             '/permalink'                   => 'Alchemy\Phrasea\ControllerProvider\Permalink',
             '/prod/baskets'                => 'Alchemy\Phrasea\ControllerProvider\Prod\BasketProvider',
             '/prod/bridge/'                => 'Alchemy\Phrasea\ControllerProvider\Prod\Bridge',

@@ -3,6 +3,7 @@ module.exports = function(grunt) {
         "pkg": grunt.file.readJSON("package.json"),
         "path": {
             "bower": "tmp-assets",
+            "vendor": "vendor",
             "asset": "www/assets"
         },
         mocha_phantomjs: {
@@ -223,6 +224,17 @@ module.exports = function(grunt) {
                 "dest": "<%= path.asset %>/json2/",
                 "flatten": true
             },
+            "lightbox-frontend": {
+                "expand": true,
+                "cwd": "<%= path.vendor %>/alchemy/lightbox-frontend/silex-bundle/public",
+                "src": [
+                    "assets/**/*",
+                    "fonts/*",
+                    "scripts/*",
+                    "styles/*"
+                ],
+                "dest": "<%= path.asset %>/lightbox-frontend/"
+            },
             "mocha": {
                 "expand": true,
                 "src": [
@@ -409,6 +421,7 @@ module.exports = function(grunt) {
         "copy:jquery.treeview",
         "copy:json2",
         "copy:js-fixtures",
+        "copy:lightbox-frontend",
         "copy:fancytree",
         "copy:modernizr",
         "copy:normalize",
