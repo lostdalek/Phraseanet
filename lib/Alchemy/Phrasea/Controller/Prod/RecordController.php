@@ -102,6 +102,7 @@ class RecordController extends Controller
                 'baskets'       => $record->get_container_baskets($this->getEntityManager(), $this->getAuthenticatedUser()),
             ]),
             "current"       => $train,
+            "recordCollection" => [], //@TODO
             "history"       => $this->render('prod/preview/short_history.html.twig', [
                 'record'        => $record,
             ]),
