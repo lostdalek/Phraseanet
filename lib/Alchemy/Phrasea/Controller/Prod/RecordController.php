@@ -14,9 +14,12 @@ use Alchemy\Phrasea\Application\Helper\EntityManagerAware;
 use Alchemy\Phrasea\Application\Helper\SearchEngineAware;
 use Alchemy\Phrasea\Controller\Controller;
 use Alchemy\Phrasea\Controller\RecordsRequest;
+use Alchemy\Phrasea\Model\Entities\BasketElement;
 use Alchemy\Phrasea\Model\Repositories\BasketElementRepository;
 use Alchemy\Phrasea\Model\Repositories\StoryWZRepository;
 use Alchemy\Phrasea\SearchEngine\SearchEngineOptions;
+use Alchemy\Phrasea\Twig\Fit;
+use Alchemy\Phrasea\Twig\PhraseanetExtension;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -24,6 +27,7 @@ class RecordController extends Controller
 {
     use EntityManagerAware;
     use SearchEngineAware;
+
     /**
      * Get record detailed view
      *
@@ -38,7 +42,7 @@ class RecordController extends Controller
         }
 
         $searchEngine = $options = null;
-        $train = '';
+        $current = '';
 
         if ('' === $env = strtoupper($request->get('env', ''))) {
             $this->app->abort(400, '`env` parameter is missing');
@@ -54,30 +58,33 @@ class RecordController extends Controller
             }
         }
 
-        $pos = (int) $request->get('pos', 0);
+        $pos = (int)$request->get('pos', 0);
         $query = $request->get('query', '');
-        $reloadTrain = !! $request->get('roll', false);
+        $reloadTrain = !!$request->get('roll', false);
 
         $record = new \record_preview(
-            $this->app,
-            $env,
-            $pos < 0 ? 0 : $pos,
-            $request->get('cont', ''),
-            $searchEngine,
-            $query,
-            $options
+          $this->app,
+          $env,
+          $pos < 0 ? 0 : $pos,
+          $request->get('cont', ''),
+          $searchEngine,
+          $query,
+          $options
         );
-
+        $jsonTrain = [];
         if ($record->is_from_reg()) {
-            $train = $this->render('prod/preview/reg_train.html.twig', ['record' => $record]);
+            $current = $this->getContainerResult($record); //$this->render('prod/preview/reg_train.html.twig', ['record' => $record]);
+            $jsonTrain = $this->getContainerChildrenCollection($record);
         }
 
         if ($record->is_from_basket() && $reloadTrain) {
-            $train = $this->render('prod/preview/basket_train.html.twig', ['record' => $record]);
+            //$train = $this->render('prod/preview/basket_train.html.twig', ['record' => $record]);
+            $jsonTrain = $this->getContainerChildrenCollection($record);
         }
 
         if ($record->is_from_feed()) {
-            $train = $this->render('prod/preview/feed_train.html.twig', ['record' => $record]);
+            //$train = $this->render('prod/preview/feed_train.html.twig', ['record' => $record]);
+            $jsonTrain = $this->getContainerChildrenCollection($record);
         }
 
         $recordCaptions = [];
@@ -87,36 +94,36 @@ class RecordController extends Controller
         }
 
         return $this->app->json([
-            "desc"          => $this->render('prod/preview/caption.html.twig', [
-                'record'        => $record,
-                'highlight'     => $query,
-                'searchEngine'  => $searchEngine,
-                'searchOptions' => $options,
-            ]),
-            "recordCaptions"=> $recordCaptions,
-            "html_preview"  => $this->render('common/preview.html.twig', [
-                'record'        => $record
-            ]),
-            "others"        => $this->render('prod/preview/appears_in.html.twig', [
-                'parents'       => $record->get_grouping_parents(),
-                'baskets'       => $record->get_container_baskets($this->getEntityManager(), $this->getAuthenticatedUser()),
-            ]),
-            "current"       => $train,
-            "recordCollection" => [], //@TODO
-            "history"       => $this->render('prod/preview/short_history.html.twig', [
-                'record'        => $record,
-            ]),
-            "popularity"    => $this->render('prod/preview/popularity.html.twig', [
-                'record'        => $record,
-            ]),
-            "tools"         => $this->render('prod/preview/tools.html.twig', [
-                'record'        => $record,
-            ]),
-            "pos"           => $record->getNumber(),
-            "title"         => str_replace(array('[[em]]', '[[/em]]'), array('<em>', '</em>'), $record->get_title($query, $searchEngine)),
-            "databox_name" => $record->getDatabox()->get_dbname(),
-            "collection_name" => $record->getCollection()->get_name(),
-            "collection_logo" => $record->getCollection()->getLogo($record->getBaseId(), $this->app),
+          "desc" => $this->render('prod/preview/caption.html.twig', [
+            'record' => $record,
+            'highlight' => $query,
+            'searchEngine' => $searchEngine,
+            'searchOptions' => $options,
+          ]),
+          "recordCaptions" => $recordCaptions,
+          "html_preview" => $this->render('common/preview.html.twig', [
+            'record' => $record
+          ]),
+          "others" => $this->render('prod/preview/appears_in.html.twig', [
+            'parents' => $record->get_grouping_parents(),
+            'baskets' => $record->get_container_baskets($this->getEntityManager(), $this->getAuthenticatedUser()),
+          ]),
+          "current" => $current,
+          "recordCollection" => $jsonTrain,  //@TODO
+          "history" => $this->render('prod/preview/short_history.html.twig', [
+            'record' => $record,
+          ]),
+          "popularity" => $this->render('prod/preview/popularity.html.twig', [
+            'record' => $record,
+          ]),
+          "tools" => $this->render('prod/preview/tools.html.twig', [
+            'record' => $record,
+          ]),
+          "pos" => $record->getNumber(),
+          "title" => str_replace(array('[[em]]', '[[/em]]'), array('<em>', '</em>'),
+            $record->get_title($query, $searchEngine)),
+          "collection_name" => $record->getCollection()->get_name(),
+          "collection_logo" => $record->getCollection()->getLogo($record->getBaseId(), $this->app),
         ]);
     }
 
@@ -130,7 +137,7 @@ class RecordController extends Controller
     {
         $flatten = (bool)($request->request->get('del_children')) ? RecordsRequest::FLATTEN_YES_PRESERVE_STORIES : RecordsRequest::FLATTEN_NO;
         $records = RecordsRequest::fromRequest($this->app, $request, $flatten, [
-            'candeleterecord'
+          'candeleterecord'
         ]);
 
         $basketElementsRepository = $this->getBasketElementRepository();
@@ -175,11 +182,11 @@ class RecordController extends Controller
     public function whatCanIDelete(Request $request)
     {
         $records = RecordsRequest::fromRequest($this->app, $request, !!$request->request->get('del_children'), [
-            'candeleterecord',
+          'candeleterecord',
         ]);
 
         return $this->render('prod/actions/delete_records_confirm.html.twig', [
-            'records'   => $records,
+          'records' => $records,
         ]);
     }
 
@@ -196,7 +203,7 @@ class RecordController extends Controller
 
         $renewed = [];
         foreach ($records as $record) {
-            $renewed[$record->getId()] = (string) $record->get_preview()->renew_url();
+            $renewed[$record->getId()] = (string)$record->get_preview()->renew_url();
         };
 
         return $this->app->json($renewed);
@@ -216,5 +223,147 @@ class RecordController extends Controller
     private function getStoryWorkZoneRepository()
     {
         return $this->app['repo.story-wz'];
+    }
+
+
+    private function getContainerResult($record)
+    {
+        /* @var $element record_preview */
+        $recordContainer = $record->get_container();
+
+        $helpers = new PhraseanetExtension($this->app);
+
+        $fit = $this->fitIn($recordContainer);
+        $recordData = [
+          'databoxId' => $recordContainer->getBaseId(),
+          'id' => $recordContainer->get_serialize_key(),
+            //'isStory' => $recordObj->isStory(),
+            //'type' => $recordObj->getType(),
+          'url' => (string)$helpers->getThumbnailUrl($recordContainer),
+          'width' => $fit['width'],
+          'height' => $fit['height'],
+          'top' => $fit['top'],
+            // "REG|{{loop.index}}|{{story.get_serialize_key}}"
+        ];
+
+        return $recordData;
+    }
+
+    /**
+     * @param \record_preview $record
+     * @return array
+     */
+    private function getContainerChildrenCollection(\record_preview $record)
+    {
+        $recordContainer = $record->get_container();
+
+        if ($record->is_from_reg()) {
+            return $this->getRecordElementData($recordContainer->get_children());
+        } else {
+            return $this->getRecordAdapterData($recordContainer->getElements());
+        }
+    }
+
+    /**
+     * @param \record_adapter[] $children
+     * @return array
+     */
+    private function getRecordElementData($children) {
+        $i = 0;
+        $output = [];
+        foreach ($children as $recordObj) {
+
+            $fit = $this->fitIn($recordObj);
+            $recordData = [
+              'databoxId' => $recordObj->getBaseId(),
+              'id' => $recordObj->getId(),
+              'url' => (string)$recordObj->get_thumbnail()->get_url(),
+              'width' => $fit['width'],
+              'height' => $fit['height'],
+              'top' => $fit['top'],
+            ];
+            if ($this->app['conf']->get('registry', 'classic', 'stories-preview')) {
+                $recordData['tooltip'] = $this->app->path('prod_tooltip_caption', [
+                  'sbas_id' => $recordObj->getBaseId(),
+                  'record_id' => $recordObj->getRecordId(),
+                  'context' => 'basket'
+                ]);
+            }
+
+                $recordData['position'] = $i;
+
+
+            $output[] = $recordData;
+            $i++;
+        }
+
+        return $output;
+    }
+
+    /**
+     * @param BasketElement[] $children
+     * @return array
+     */
+    private function getRecordAdapterData($children) {
+        $i = 0;
+        $output = [];
+        foreach ($children as $element) {
+
+            $recordObj = $element->getRecord($this->app);
+
+            $fit = $this->fitIn($recordObj);
+            $recordData = [
+              'databoxId' => $recordObj->getBaseId(),
+              'id' => $recordObj->getId(),
+              'url' => (string)$recordObj->get_thumbnail()->get_url(),
+              'width' => $fit['width'],
+              'height' => $fit['height'],
+              'top' => $fit['top'],
+            ];
+            if ($this->app['conf']->get('registry', 'classic', 'stories-preview')) {
+                $recordData['tooltip'] = $this->app->path('prod_tooltip_caption', [
+                  'sbas_id' => $recordObj->getBaseId(),
+                  'record_id' => $recordObj->getRecordId(),
+                  'context' => 'basket'
+                ]);
+            }
+
+                $recordData['position'] = $element->getOrd();
+
+
+            $output[] = $recordData;
+            $i++;
+        }
+
+        return $output;
+    }
+
+    private function fitIn($record)
+    {
+
+        $thumb_w = 70;
+        $thumb_h = 70;
+
+        $thumbnail = $record->get_thumbnail();
+
+        if ($thumbnail != null) {
+
+            $thumb_w = $thumbnail->get_width();
+            $thumb_h = $thumbnail->get_height();
+        }
+
+        $box_w = 70;
+        $box_h = 80;
+
+        $original_h = $thumb_h > 0 ? $thumb_h : 70;
+        $original_w = $thumb_w > 0 ? $thumb_w : 70;
+
+        $fitHelper = new Fit();
+        $fit_size = $fitHelper->fitIn(
+          ["width" => $original_w, "height" => $original_h],
+          ["width" => $box_w, "height" => $box_h]
+        );
+
+        return $fit_size;
     }
 }
