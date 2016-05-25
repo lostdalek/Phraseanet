@@ -71,20 +71,21 @@ class RecordController extends Controller
           $query,
           $options
         );
-        $jsonTrain = [];
+        $recordCollection = [];
+
         if ($record->is_from_reg()) {
-            $current = $this->getContainerResult($record); //$this->render('prod/preview/reg_train.html.twig', ['record' => $record]);
-            $jsonTrain = $this->getContainerChildrenCollection($record);
-        }
-
-        if ($record->is_from_basket() && $reloadTrain) {
+            $current = $this->getContainerResult($record->get_container()); //$this->render('prod/preview/reg_train.html.twig', ['record' => $record]);
+            $recordCollection = $this->getContainerChildrenCollection($record);
+        } else if ($record->is_from_basket() && $reloadTrain) {
+            $current = $this->getContainerResult($record);
             //$train = $this->render('prod/preview/basket_train.html.twig', ['record' => $record]);
-            $jsonTrain = $this->getContainerChildrenCollection($record);
-        }
-
-        if ($record->is_from_feed()) {
+            $recordCollection = $this->getContainerChildrenCollection($record);
+        } else if ($record->is_from_feed()) {
+            $current = $this->getContainerResult($record->get_container());
             //$train = $this->render('prod/preview/feed_train.html.twig', ['record' => $record]);
-            $jsonTrain = $this->getContainerChildrenCollection($record);
+            $recordCollection = $this->getContainerChildrenCollection($record);
+        } else {
+            $current = $this->getContainerResult($record);
         }
 
         $recordCaptions = [];
@@ -109,7 +110,7 @@ class RecordController extends Controller
             'baskets' => $record->get_container_baskets($this->getEntityManager(), $this->getAuthenticatedUser()),
           ]),
           "current" => $current,
-          "recordCollection" => $jsonTrain,  //@TODO
+          "recordCollection" => $recordCollection,
           "history" => $this->render('prod/preview/short_history.html.twig', [
             'record' => $record,
           ]),
@@ -226,10 +227,10 @@ class RecordController extends Controller
     }
 
 
-    private function getContainerResult($record)
+    private function getContainerResult($recordContainer)
     {
         /* @var $element record_preview */
-        $recordContainer = $record->get_container();
+        //$recordContainer = $record->get_container();
 
         $helpers = new PhraseanetExtension($this->app);
 
@@ -237,12 +238,21 @@ class RecordController extends Controller
         $recordData = [
           'databoxId' => $recordContainer->getBaseId(),
           'id' => $recordContainer->get_serialize_key(),
-            //'isStory' => $recordObj->isStory(),
+          'isGroup' => $recordContainer->isStory(),
             //'type' => $recordObj->getType(),
           'url' => (string)$helpers->getThumbnailUrl($recordContainer),
           'width' => $fit['width'],
           'height' => $fit['height'],
-          'top' => $fit['top'],
+            'preview' => [
+                'width' => $recordContainer->get_preview()->get_width(),
+                'height' => $recordContainer->get_preview()->get_height()
+            ],
+            'fit' => [
+              'width' => $fit['width'],
+              'height' => $fit['height'],
+              'top' => $fit['top'],
+            ]
+
             // "REG|{{loop.index}}|{{story.get_serialize_key}}"
         ];
 
@@ -260,7 +270,8 @@ class RecordController extends Controller
         if ($record->is_from_reg()) {
             return $this->getRecordElementData($recordContainer->get_children());
         } else {
-            return $this->getRecordAdapterData($recordContainer->getElements());
+
+            return $this->getRecordAdapterData($record, $recordContainer->getElements());
         }
     }
 
@@ -301,10 +312,12 @@ class RecordController extends Controller
     }
 
     /**
+     *
+     * @param \record_preview $record
      * @param BasketElement[] $children
      * @return array
      */
-    private function getRecordAdapterData($children) {
+    private function getRecordAdapterData($record, $children) {
         $i = 0;
         $output = [];
         foreach ($children as $element) {
@@ -320,12 +333,23 @@ class RecordController extends Controller
               'height' => $fit['height'],
               'top' => $fit['top'],
             ];
+
+
             if ($this->app['conf']->get('registry', 'classic', 'stories-preview')) {
-                $recordData['tooltip'] = $this->app->path('prod_tooltip_caption', [
-                  'sbas_id' => $recordObj->getBaseId(),
-                  'record_id' => $recordObj->getRecordId(),
-                  'context' => 'basket'
-                ]);
+                if ($record->is_from_feed()) {
+                    $recordData['tooltip'] = $this->app->path('prod_tooltip_preview', [
+                      'sbas_id' => $recordObj->getBaseId(),
+                      'record_id' => $recordObj->getRecordId(),
+                    ]);
+
+                } else {
+                    // is from basket:
+                    $recordData['tooltip'] = $this->app->path('prod_tooltip_caption', [
+                      'sbas_id' => $recordObj->getBaseId(),
+                      'record_id' => $recordObj->getRecordId(),
+                      'context' => 'basket'
+                    ]);
+                }
             }
 
                 $recordData['position'] = $element->getOrd();
@@ -338,6 +362,11 @@ class RecordController extends Controller
         return $output;
     }
 
+    /**
+     * Resize record thumbnail - direct translation from twig macro
+     * @param $record
+     * @return array
+     */
     private function fitIn($record)
     {
 
